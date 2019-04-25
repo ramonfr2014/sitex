@@ -1,45 +1,73 @@
-var wsclient = new WebSocket('ws://localhost:9090');
+var wsclient = null;
 var myConnection;
-var dataChannel;
+var dataChannel = null;
 var shouldSendIceCandy = true;
+var localVideo = document.getElementById("localVideo");
+var remoteVideo = document.getElementById("remoteVideo");
+var myStream;
 
-wsclient.onopen = function (p1) { start(true); };
+document.getElementById("send").addEventListener("click", function(){
+    sendDcMessage();
+});
+document.addEventListener('keypress', function(e) {if(e.code === "Enter"){sendDcMessage();}});
 
-wsclient.onmessage = function (message) {
-    // console.log(message);
-    try {
-        var message = JSON.parse(message.data);
+var constraints = { audio: true, video: { width: { min: 1280 }, height: { min: 720 } } };
 
-        switch (message.type) {
+navigator.mediaDevices.getUserMedia(constraints)
+     .then(function(stream) {
+        localVideo.srcObject = stream;
+        myStream = stream;
+         startWsClient();
 
-            case "checkin":
-                if (message.doesRoomExist)
-                    sendOffer();
-                break;
+     })
+     .catch(function(err) {
+         alert("Error when accessing your camera: " + err);
+     });
 
-            case "offer":
-                handleOffer(message);
-                break;
+// startWsClient();
 
-            case "answer":
-                handleAnswer(message);
-                break;
+function startWsClient(){
 
-            case "icecandy":
-                console.log("got icecandy");
-                myConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
-                break;
+    wsclient = new WebSocket('ws://localhost:9090');
 
-            case "warning":
-                shouldSendIceCandy = false;
-                alert(message.message);
-                break;
+    wsclient.onopen = function (p1) { start(true); };
+
+    wsclient.onmessage = function (message) {
+        // console.log(message);
+        try {
+            var message = JSON.parse(message.data);
+
+            switch (message.type) {
+
+                case "checkin":
+                    if (message.doesRoomExist)
+                        sendOffer();
+                    break;
+
+                case "offer":
+                    handleOffer(message);
+                    break;
+
+                case "answer":
+                    handleAnswer(message);
+                    break;
+
+                case "icecandy":
+                    console.log("got icecandy");
+                    myConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+                    break;
+
+                case "warning":
+                    shouldSendIceCandy = false;
+                    alert(message.message);
+                    break;
+            }
+
         }
 
-    }
-
-    catch (e) {console.log(e);}
-};
+        catch (e) {console.log(e);}
+    };
+}
 
 function sendOffer() {
 
@@ -86,50 +114,80 @@ function start(shouldCheckin) {
         }
     };
 
-    openDataChannel();
+
 
     myConnection.oniceconnectionstatechange = function() {
         console.log(myConnection.iceConnectionState);
         if (myConnection.iceConnectionState == "disconnected") {
             closeCon();
         }
+
+        if (myConnection.iceConnectionState == "connected") {
+            openDataChannel();
+        }
+
     };
 
     if(shouldCheckin)
         send({type:"checkin", room:room});
 
+    openDataChannel();
+
 }
 
 function openDataChannel() {
 
-    const dataChannelOptions = {
-        reliable: false
+    var dataChannelOptions = {
+        reliable: true
     };
 
-    dataChannel = myConnection.createDataChannel("chat", dataChannelOptions);
+    dataChannel = myConnection.createDataChannel(room, dataChannelOptions);
 
     dataChannel.onerror = (error) => {
         console.log("Data Channel Error:", error);
     };
 
     dataChannel.onmessage = (event) => {
-
-        console.log("Got Data Channel Message");
+        console.log("Got Data Channel Message: " + event.data);
     };
 
     dataChannel.onopen = () => {
-
         console.log("DC open");
-        dataChannel.send("hi");
-
     };
 
     dataChannel.onclose = () => {
         console.log("The Data Channel is Closed");
     };
+
+    myConnection.ondatachannel = function(event) {
+        var channel = event.channel;
+﻿           channel.onopen = function(event) {
+            console.log("DC open");
+        },
+        channel.onmessage = function(event) {
+            console.log("Dc message: " + event.data);
+        }
+    };
+
+}
+
+function sendDcMessage(){
+    var msg = document.getElementById("chat").value;
+
+    if(msg.length > 0) {
+        if (dataChannel != null) {
+            dataChannel.send(msg);
+        }
+    }
+
+    document.getElementById("chat").value = "";
 }
 
 function closeCon(){
+    // dataChannel.close();
+    // dataChannel = null;
+    // myConnection.close();
+    // myConnection.onicecandidate = null;
     start(false);
 }
 
