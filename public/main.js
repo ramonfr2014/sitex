@@ -11,13 +11,16 @@ document.getElementById("send").addEventListener("click", function(){
 });
 document.addEventListener('keypress', function(e) {if(e.code === "Enter"){sendDcMessage();}});
 
-var constraints = { audio: true, video: { width: { min: 1280 }, height: { min: 720 } } };
+var constraints = {
+    "audio": false,
+    "video": true
+};
 
 navigator.mediaDevices.getUserMedia(constraints)
      .then(function(stream) {
         localVideo.srcObject = stream;
         myStream = stream;
-         startWsClient();
+        startWsClient();
 
      })
      .catch(function(err) {
@@ -30,7 +33,7 @@ function startWsClient(){
 
     wsclient = new WebSocket('ws://localhost:9090');
 
-    wsclient.onopen = function (p1) { start(true); };
+    wsclient.onopen = function (p1) { startRtc(true); };
 
     wsclient.onmessage = function (message) {
         // console.log(message);
@@ -99,7 +102,7 @@ function handleAnswer(message) {
     myConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
 }
 
-function start(shouldCheckin) {
+function startRtc(shouldCheckin) {
 
     var configuration = {"iceServers": [{ "urls": "stun:stun.1.google.com:19302" }]};
     myConnection = new RTCPeerConnection(configuration);
@@ -114,8 +117,6 @@ function start(shouldCheckin) {
         }
     };
 
-
-
     myConnection.oniceconnectionstatechange = function() {
         console.log(myConnection.iceConnectionState);
         if (myConnection.iceConnectionState == "disconnected") {
@@ -127,6 +128,12 @@ function start(shouldCheckin) {
         }
 
     };
+
+    myConnection.onaddstream = function(event) {
+        remoteVideo.srcObject = event.stream;
+    };
+
+    myConnection.addStream(myStream);
 
     if(shouldCheckin)
         send({type:"checkin", room:room});
@@ -188,7 +195,7 @@ function closeCon(){
     // dataChannel = null;
     // myConnection.close();
     // myConnection.onicecandidate = null;
-    start(false);
+    startRtc(false);
 }
 
 function send(message){

@@ -9,7 +9,7 @@
 <body>
 
 <video id="localVideo" autoplay muted width="50" height="auto"></video>
-<video id="remoteVideo" autoplay></video>
+<video id="remoteVideo" autoplay muted></video>
 
 <input type="text" id="chat"/>
 <button type="button" id="send" >Send</button>
